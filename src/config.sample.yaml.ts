@@ -1,0 +1,60 @@
+/** The sample used when generating a new YAML config file. */
+export default `
+#
+# Config file for ipfs-sync
+# It's highly recommended you set DB and Dirs before running the daemon.
+#
+# If using the default systemd script, it expects a config file to be in $USER/.ipfs-sync.yaml by default
+#
+
+# Path to file where db should be stored (example: "/home/user/.ipfs-sync.db")
+DB:
+
+# Verify filestore integrity on startup (ignored if no dirs use "nocopy")
+VerifyFilestore: false
+
+# Set the dirs to monitor: 
+Dirs:
+## Unique identifier for the IPNS key
+#  - ID: Example1
+## Full path of directory to sync
+#    Dir: /home/user/Documents/
+## If true, use filestore (if enabled on IPFS daemon)
+#    Nocopy: false
+## If true, will use filesize+modification date to track changes, instead of hashing. Recommended if you have a very large directory.
+#    DontHash: false
+## If true, will pin the root directory
+#    Pin: false
+## If true, and EstuaryAPIKey is set, will attempt to pin the CID via Estuary as well
+#    Estuary: false
+#  - ID: Example2
+#    Dir: /home/user/Pictures/
+#    Nocopy: false
+#    DontHash: false
+#    Pin: false
+
+# API key for Estuary (optional, find out more at https://estuary.tech)
+EstuaryAPIKey:
+
+# Relative MFS directory path (default "/ipfs-sync/")
+BasePath: /ipfs-sync/
+
+# Node to connect to over HTTP (default "http://127.0.0.1:5001")
+EndPoint: http://127.0.0.1:5001
+
+# File extensions to ignore
+Ignore: 
+  - kate-swp
+  - swp
+  - part
+  - crdownload
+  
+# If true, ignore anything prefixed with "."
+IgnoreHidden: true
+
+# Time to sleep between IPNS syncs (ex: 120s) (default 10s)
+Sync: 10s
+
+# Timeout for simple commands like \`version\` and \`files/mkdir\`. Ignored for calls that are expected to take a while like \`add\`.
+Timeout: 30s
+`.trim()
