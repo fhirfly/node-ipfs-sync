@@ -3,7 +3,7 @@ import { Configuration } from './config'
 import { HttpClient, HttpError } from './httpClient'
 import { none, Option, some } from './result'
 
-export default class EstuaryClient {
+export class EstuaryClient {
   private readonly hasApiKey: boolean
   private readonly http: HttpClient
 

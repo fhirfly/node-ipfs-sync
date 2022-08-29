@@ -1,12 +1,16 @@
 import { homedir } from 'os'
 import { join, sep as PathSeparator } from 'path'
 import { program } from 'commander'
+import { Level } from 'level'
 import parseDuration from 'parse-duration'
 import * as log from './logger'
 import { Args, ConfigFile, Configuration } from './config'
 import { version as PackageVersion } from '../package.json'
 import { IpfsClient } from './ipfsClient'
-import EstuaryClient from './estuaryClient'
+import { EstuaryClient } from './estuaryClient'
+import { Watchdog } from './watchdog'
+import { HashStore } from './hashStore'
+import { FileHashProcessor } from './fileHash'
 
 program
   .option('--base-path <base-path>', 'Relative MFS directory path (default: /ipfs-sync/)')
@@ -93,13 +97,14 @@ async function main() {
     log.info(config)
   }
 
-	if (config.db) {
-    // todo:
-		// InitDB(DBPath)
-	}
+  const database = config.db
+    ? new Level(config.db, { valueEncoding: 'utf8' })
+    : undefined
 
   const ipfsClient = new IpfsClient(config)
   const estuaryClient = new EstuaryClient(config)
+  const hashStore = new HashStore()
+  const hashProcessor = new FileHashProcessor(config, hashStore, database)
 
   const getIpfsVersion = await ipfsClient.version()
   if (!getIpfsVersion.ok) {
@@ -108,6 +113,19 @@ async function main() {
   }
 
   log.info(`node-ipfs-sync v${config.version} starting up...`)
+  const watchdog = new Watchdog(
+    config,
+    hashStore,
+    hashProcessor,
+    ipfsClient,
+    estuaryClient,
+    database
+  )
+  const watchdogError = await watchdog.start()
+  if (watchdogError.hasValue) {
+    log.fatal('Watchdog error', watchdogError.value)
+    process.exit(1)
+  }
 }
 
 main().catch((e) => {

@@ -7,7 +7,7 @@ import { HttpClient, HttpError } from './httpClient'
 import { escape } from 'querystring'
 import { err, none, ok, Option, Result, some } from 'result'
 
-const KEY_SPACE = 'ipfs-sync.'
+export const KEY_SPACE = 'ipfs-sync.'
 const API_PREFIX = '/api/v0/'
 
 export type Key = {
@@ -376,8 +376,8 @@ export class IpfsClient {
       return err(response.error)
     }
 
-    // normalize the received data into lowercased object properties
     const data = JSON.parse(response.value) as { Id: string, Name: string }
+    // normalize the received data into lowercased object properties
     return ok({ id: data.Id, name: data.Name })
   }
 

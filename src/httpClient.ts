@@ -1,8 +1,10 @@
 import axios, { AxiosError, AxiosInstance, Method } from 'axios'
 import { err, ok, Result } from './result'
-import * as log from './logger'
-import { Agent } from 'https'
 
+/** Parses the provided JSON `text` into a JS object.
+ * Transforms the first letter of all keys to lower case, eg.
+ * `{ Message: '' }` becomes `{ message: '' }`.
+ */
 export function parseJson(text: string): Record<string, any> {
   return JSON.parse(text, function (key, value) {
     const normalizedKey = key.substring(0, 1).toLowerCase() + key.slice(1)
@@ -12,15 +14,19 @@ export function parseJson(text: string): Record<string, any> {
 }
 
 /** Represents an error received by the IPFS daemon. */
-export class HttpError {
+export class HttpError extends Error {
+  public readonly name = 'HttpError'
+
   private constructor(
     public code: number,
     public type: string,
     /** Contains error text. */
-    public message?: string,
+    public message: string,
     /** Contains error text. */
     public error?: string,
-  ) {}
+  ) {
+    super(message)
+  }
 
   static fromAxiosError(error: AxiosError) {
     if (error.response?.data) {
