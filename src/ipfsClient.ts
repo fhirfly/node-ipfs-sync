@@ -114,9 +114,7 @@ export class IpfsClient {
     return ok(json.Hash)
   }
 
-  /** Add references to IPFS files and directories in MFS (or copy within MFS).
-   * [TODO]: See `main.go` on line `264` for usage.
-  */
+  /** Add references to IPFS files and directories in MFS (or copy within MFS). */
   async copyFile(source: string, destination: string): Promise<Option<HttpError>> {
     const response = await this.http.post(`files/cp`, {
       timeout: this.config.timeout,
