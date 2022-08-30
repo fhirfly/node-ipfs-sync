@@ -4,8 +4,7 @@ import { basename } from 'path'
 import * as log from './logger'
 import { Configuration } from './config'
 import { HttpClient, HttpError } from './httpClient'
-import { escape } from 'querystring'
-import { err, none, ok, Option, Result, some } from 'result'
+import { err, none, ok, Option, Result, some } from './result'
 
 export const KEY_SPACE = 'ipfs-sync.'
 const API_PREFIX = '/api/v0/'
@@ -119,15 +118,12 @@ export class IpfsClient {
    * [TODO]: See `main.go` on line `264` for usage.
   */
   async copyFile(source: string, destination: string): Promise<Option<HttpError>> {
-    // The endpoint (https://docs.ipfs.tech/reference/kubo/rpc/#api-v0-files-cp)
-    // requires providing two key/value pairs, both with key 'arg'. We can't build
-    // this query via the request options, because providing two identical keys
-    // on a JS object will result in the latter one overriding the first one,
-    // hence we build it manually.
-    const query = escape(`arg=${source}&arg=${destination}`)
-
-    const response = await this.http.post(`files/cp?${query}`, {
+    const response = await this.http.post(`files/cp`, {
       timeout: this.config.timeout,
+      query: new URLSearchParams([
+        ['arg', source],
+        ['arg', destination],
+      ]),
     })
     return response.ok ? none() : some(response.error)
   }
