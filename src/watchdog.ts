@@ -1,8 +1,11 @@
 import { Stats } from 'fs'
 import { readdir, stat } from 'fs/promises'
-import { basename, extname, resolve, sep as PathSeparator } from 'path'
+import { basename, extname, normalize, resolve, sep as PathSeparator } from 'path'
+
 import { Level } from 'level'
-import { Configuration } from './config'
+import { FSWatcher } from 'chokidar'
+
+import { Configuration, DirKey } from './config'
 import { EstuaryClient } from './estuaryClient'
 import { IpfsClient, KEY_SPACE } from './ipfsClient'
 import * as log from './logger'
@@ -85,6 +88,11 @@ function sleep(time: number): Promise<void> {
 }
 
 export class Watchdog {
+  private readonly watcher: FSWatcher = new FSWatcher({
+    alwaysStat: true,
+    ignoreInitial: true
+  })
+
   constructor(
     private readonly config: Configuration,
     private readonly hashStore: HashStore,
@@ -178,7 +186,7 @@ export class Watchdog {
           found = true
           log.info(`${dir.ID} loaded: ${key.id}`)
 
-          // todo: watchDir(dir.Dir, dir.Nocopy, dir.DontHash)
+          this.watchDir(dir)
           break
         }
       }
@@ -208,7 +216,7 @@ export class Watchdog {
       await ipfsClient.publish(dir.CID, dir.ID)
       log.info(`${dir.ID} loaded: ${generateKeyResult.value}`)
 
-      // todo: watchDir(dir.Dir, dir.Nocopy, dir.DontHash)
+      this.watchDir(dir)
     }
 
     // main loop
@@ -419,5 +427,94 @@ export class Watchdog {
     }
 
     return false
+  }
+
+  private watchDir(dir: DirKey) {
+    const { config, hashProcessor, hashStore, ipfsClient } = this
+
+    const dirName = dir.Dir.split(PathSeparator).slice(-2, 1)[0]
+    const localDirs: Record<string, boolean> = {}
+
+    const addFile = async (path: string, overwrite: boolean) => {
+      if (!path.startsWith(dir.Dir)) return
+      if (this.shouldIgnorePath(path)) return
+
+      const pathParts = path.split(PathSeparator)
+      const parentDir = pathParts.slice(0, -1).join(PathSeparator)
+      const makeDir = !localDirs[parentDir]
+      localDirs[parentDir] = true
+
+      const mfsPath = path
+        .slice(dir.Dir.length)
+        .replaceAll(PathSeparator, '/')
+
+      const addFileResult = await this.addFile(
+        path,
+        `${dirName}/${mfsPath}`,
+        dir.Nocopy,
+        makeDir,
+        overwrite
+      )
+
+      if (!addFileResult.ok) {
+        log.error('[Watcher] Error while trying to add newly created file', addFileResult.error)
+      }
+
+      if (addFileResult.ok && config.verbose) {
+        log.info('[Watcher] Add file response', addFileResult.value)
+      }
+
+      const fileHash = hashStore.hashmap[path] ?? new FileHash(path, '', '')
+      hashStore.hashmap[path] = fileHash.recalculate(dir.DontHash)
+      await hashProcessor.update(fileHash)
+    }
+
+    const removeFile = async (path: string) => {
+      if (!path.startsWith(dir.Dir)) return
+      if (this.shouldIgnorePath(path)) return
+
+      const mfsPath = path
+        .slice(dir.Dir.length)
+        .replaceAll(PathSeparator, '/')
+
+      log.info(`[Watcher] Removing "${dirName}/${mfsPath}"...`)
+
+      const removeFileError = await ipfsClient.removeFile(`${dirName}/${mfsPath}`)
+      if (removeFileError.hasValue) {
+        log.error('[Watcher] Error while removing file', removeFileError.value)
+      }
+
+      await hashProcessor.delete(mfsPath)
+    }
+
+    const removeDir = async (path: string) => {
+      if (!path.startsWith(dir.Dir)) return
+      if (this.shouldIgnorePath(path)) return
+
+      // if the currently watched dir is deleted - stop watching it
+      if (normalize(path) === normalize(dir.Dir)) {
+        this.watcher.unwatch(dir.Dir)
+        delete localDirs[path]
+      }
+
+      await removeFile(path)
+    }
+
+    // start watching directory on disk
+    this.watcher.add(dir.Dir)
+
+    // on file added; if a dir with nested dirs and files is pasted,
+    // this event will be raised for each nested file,
+    // providing the absolute path to the file;
+    // therefore we don't have to add watchers to every sub-folder,
+    // we can just watch the root
+    this.watcher.on('add', async (path) => await addFile(path, true))
+    // on file content updated
+    this.watcher.on('change', async (path) => await addFile(path, true))
+    // on file deleted; if an entire dir is deleted, this event will be
+    // raised for each file in that dir, providing the absolute path to the file
+    this.watcher.on('unlink', async (path) => await removeFile(path))
+    // on dir deleted; also raised when the watched dir itself is deleted
+    this.watcher.on('unlinkDir', async (path) => await removeDir(path))
   }
 }
