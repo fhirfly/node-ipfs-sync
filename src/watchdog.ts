@@ -31,11 +31,17 @@ async function statSafe(path: string): Promise<Result<Stats, Error>> {
 }
 
 /** Recursively walks over a given `dir` and collects the paths of all files.
- * When `ignoreHidden` is `true` ignores files with names starting with a dot (`.`).
+ * Excludes files based on the `@shouldIgnorePath` function.
+ *
+ * @param shouldIgnorePath A function that is invoked for each discovered path.
+ * When the result is `true` the path will be ignored and _not_ included in the results.
  *
  * @returns An array with all files within the given `dir`.
 */
-export async function walkdir(dir: string, ignoreHidden: boolean): Promise<Result<string[], Error>> {
+export async function walkdir(
+  dir: string,
+  shouldIgnorePath: (path: string, stats: Stats) => boolean
+): Promise<Result<string[], Error>> {
   const getEntries = await readdirSafe(dir)
   if (!getEntries.ok) {
     return err(getEntries.error)
@@ -50,8 +56,7 @@ export async function walkdir(dir: string, ignoreHidden: boolean): Promise<Resul
     }
 
     const stats = getStats.value
-    if (ignoreHidden && basename(path).length > 0 && basename(path).startsWith('.')) {
-      // ignore hidden files and directories; move on to the next entry
+    if (shouldIgnorePath(path, stats)) {
       continue
     }
 
@@ -62,7 +67,7 @@ export async function walkdir(dir: string, ignoreHidden: boolean): Promise<Resul
     }
 
     // @path points to a directory
-    const walkNestedDir = await walkdir(path, ignoreHidden)
+    const walkNestedDir = await walkdir(path, shouldIgnorePath)
     if (!walkNestedDir.ok) {
       return err(walkNestedDir.error)
     }
@@ -308,11 +313,11 @@ export class Watchdog {
     pin: boolean,
     estuary: boolean
   ): Promise<Result<string, Error>> {
-    const { config: { ignoreHidden }, estuaryClient, ipfsClient } = this
+    const { estuaryClient, ipfsClient } = this
 
     const pathParts = path.split(PathSeparator)
     const dirName = pathParts.splice(-2, 1)[0]
-    const getDirFiles = await walkdir(dirName, ignoreHidden)
+    const getDirFiles = await walkdir(dirName, p => this.shouldIgnorePath(p))
     if (!getDirFiles.ok) {
       return err(getDirFiles.error)
     }
@@ -379,7 +384,7 @@ export class Watchdog {
       return err(new Error('Database not provided'))
     }
 
-    const getFiles = await walkdir(path, ignoreHidden)
+    const getFiles = await walkdir(path, p => this.shouldIgnorePath(p))
     if (!getFiles.ok) {
       return err(getFiles.error)
     }
@@ -390,11 +395,6 @@ export class Watchdog {
         log.info(`Loading "${file}"...`)
       }
 
-      const extension = extname(file)
-      if (ignore.includes(extension)) {
-        continue
-      }
-
       // loading existing data from db
       const fakeHash = await db.get(`ts_${file}`)
       const hash = dontHash ? '' : await db.get(file)
@@ -402,5 +402,22 @@ export class Watchdog {
     }
 
     return ok(hashes)
+  }
+
+  /** Checks whether the given `@path` should be ignored, based on the app configuration. */
+  private shouldIgnorePath(path: string) {
+    const { config: { ignore, ignoreHidden } } = this
+
+    // check whether we are ignoring hidden files (starting with a dot `.`)
+    if (ignoreHidden && basename(path).startsWith('.')) {
+      return true
+    }
+
+    // check whether the file extension is one of the ignored ones
+    if (ignore.includes(extname(path))) {
+      return true
+    }
+
+    return false
   }
 }
