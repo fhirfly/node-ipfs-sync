@@ -25,7 +25,7 @@ program
     'Longest time to wait for short API calls like "version" and "files/mkdir", eg. "10s" or "1m 30s" (default: 30s)',
     value => parseDuration(value)
   )
-  .option('--config <file-path>', `Path to config file to use (default: ${join(homedir(), '.ipfs-sync.yaml')})`)
+  .option('--config <file-path>', 'Path to config file to use', join(homedir(), '.ipfs-sync.yaml'))
   .option('--db <db-path>', `Path to file where db should be stored (default: ${join(homedir(), '.ipfs-sync.db')})`)
   .option('--ignore-hidden', 'Ignore files prefixed with "." (default: false)')
   .option(
@@ -65,11 +65,8 @@ async function main() {
 
   log.info("Loading configuration...")
 
-  let config!: Configuration
-  if (args.config) {
-    const configFile = ConfigFile.load(args.config)
-    config = Configuration.create(args, configFile)
-  }
+  const configFile = ConfigFile.load(args.config)
+  const config = Configuration.create(args, configFile)
 
   // Make sure dirs are provided
   if (config.dirs.length === 0) {

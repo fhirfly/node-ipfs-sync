@@ -34,7 +34,7 @@ export interface Args extends OptionValues {
   /** Longest time to wait for API calls like `version` and `files/mkdir`, in milliseconds */
   timeout?: number
   /** Path to config file to use */
-  config?: string
+  config: string
   /** Path to file where db should be stored */
   db?: string
   /** Ignore files prefixed with `.` (dot) */
@@ -177,7 +177,7 @@ export class Configuration {
       args.timeout
         ? args.timeout
         : (configFile?.Timeout ?? parseDuration('30s', 'ms')),
-      args.config ?? join(homedir(), '.ipfs-sync.yaml'),
+      args.config,
       args.db
         ? args.db
         : (configFile?.DB ?? join(homedir(), '.ipfs-sync.db')),
